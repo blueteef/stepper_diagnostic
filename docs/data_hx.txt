@@ -1,0 +1,70 @@
+---Project Scope---
+
+This will be a user friendly stepper motor and stepper driver diagnostic and testing rig able to test all or most commercially available stepper drivers and most nema 17 motors. It should consists of simple hardware, and CLI connectivity. It should be easily configurable, and able to adapt to different tasks quickly with minimal code changes. 
+
+---Project Goals---
+
+1. Extensibility - should be able to adapt to multiple types of steppers. 
+2. Ease of use - full user manual, and simple GNU style CLI command structue. 
+3. Full github integration to update the repository @ https://github.com/blueteef/stepper_diagnostic.git
+4. initially the only steppers needing tested are TMC200, and A4988 drivers which all share the same socket/power pins. 
+5. This document should live in the docs folder, and be used as the source of truth for all interactions with Claude Code, and other developers. Any changes, and updates to context should be documented here. 
+
+---Project Design---
+
+Consists of an socketed ESP32-C3 Supermini board, 16 pin stepper driver socket,  a 4 wire socket for motor output, and a 2 wire socket for 12-24V. 
+
+All user interaction should happen in the CLI, making hardware simple. 
+
+16-pin socket wired and validated 2026-03-23. All output pins confirmed toggling correctly via Phase 1 scaffold. Motor responds to STEP/DIR/ENABLE. VREF_PWM (GPIO 10) not wired — using onboard trimmer pot for current limit instead. DIAG/INDEX not connected (TMC2208 on hand does not expose these pins). 1k series resistor on GPIO 9 (socket pin 5 / A4988 RESET) doubles as TMC2209 PDN_UART resistor for future use.
+
+---GPIO Pin Assignment (ESP32-C3 Supermini)---
+
+GPIO 0  OUT  STEP          Step pulse output
+GPIO 1  OUT  DIR           Direction
+GPIO 2  OUT  ENABLE        Active-low driver enable (pulled up)
+GPIO 3  OUT  MS1/CFG1      Microstep bit 0; TMC2209 UART address bit 0
+GPIO 4  OUT  MS2/CFG2      Microstep bit 1; TMC2209 UART address bit 1
+GPIO 5  OUT  MS3/CFG3      Microstep bit 2 (A4988 only; NC on TMC2209)
+GPIO 6  OUT  SPREAD/CFG0   SpreadCycle/StealthChop select (TMC2209 pin 9)
+GPIO 7  IN   DIAG/FAULT    Open-drain fault output from driver (pullup)
+GPIO 8  IN   INDEX         TMC2209 INDEX / unused on A4988 (pullup)
+GPIO 9  BIDIR UART TX/RX   Single-wire half-duplex UART to TMC2209 (1k resistor)
+GPIO 10 OUT  VREF_PWM      PWM -> 10k+100nF RC filter -> A4988 Vref pin
+GPIO 20 --   spare
+GPIO 21 --   spare
+GPIO 18 --   USB D- (reserved)
+GPIO 19 --   USB D+ (reserved)
+
+TMC2209 UART address: MS1=LOW, MS2=LOW in TMC2209 mode => address 0.
+
+---Software Architecture---
+
+Project uses PlatformIO targeting lolin_c3_mini (ESP32-C3).
+Build flag ARDUINO_USB_CDC_ON_BOOT=1 required for USB serial CLI.
+
+Key libraries:
+  teemuatlut/TMCStepper  - TMC2209 UART register access
+  bblanchon/ArduinoJson  - optional --json output mode
+
+Layers:
+  CLI (CommandParser, ICommand subcommands) -> IStepperDriver interface -> A4988Driver / TMC2209Driver
+
+Command grammar: GNU-style --flag value
+  test step [--steps N] [--speed N] [--dir fwd|rev] [--usteps N]
+  test continuous / test stop
+  driver select <a4988|tmc2209>
+  driver status [--json]
+  driver config --usteps N [--spread] [--stealthchop]
+  driver current --rms N | --vref N
+  help [command]
+
+---Implementation Phases---
+
+Phase 1: Hardware skeleton - COMPLETE (2026-03-23). GPIO scaffold validated, motor confirmed working.
+Phase 2: Command parser - COMPLETE (2026-03-23). Parser validated on hardware via echo mode.
+Phase 3: A4988 driver - COMPLETE (2026-03-23). Motor validated. Coil wiring note: verify winding pairs with multimeter before connecting. VREF_PWM not wired — using onboard pot.
+Phase 4: TMC2208 driver - IMPLEMENTED (2026-03-23), UNTESTED. Driver on hand appears faulty. Revisit when replacement arrives. TMC2208Stepper via TMCStepper lib, half-duplex UART on GPIO 9, StealthChop/SpreadCycle, GSTAT+DRV_STATUS reporting.
+Phase 5: Docs, NVS persistence, GitHub Actions CI
+
+---Developer Notes---
