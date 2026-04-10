@@ -1,24 +1,74 @@
 #include "CLI.h"
 #include <stdlib.h>
 
+#define NVS_NAMESPACE "stepper"
+
 CLI::CLI(IStepperDriver* driver) : _driver(driver), _bufLen(0) {
     _buf[0] = '\0';
 }
 
 CLI::~CLI() {
+    _prefs.end();
     delete _driver;
 }
 
 void CLI::begin() {
+    _prefs.begin(NVS_NAMESPACE, false);
+
     Serial.println(F("\nStepper Driver Diag"));
+
+    // Restore saved driver (overrides constructor default)
+    _loadSettings();
+
     if (_driver) {
-        _driver->begin();
         Serial.print(F("Driver : ")); Serial.println(_driver->driverName());
     } else {
         Serial.println(F("No driver loaded. Use: driver select <name>"));
     }
     Serial.println(F("Type 'help' for commands."));
     _printPrompt();
+}
+
+// -----------------------------------------------------------------------------
+// NVS persistence
+// -----------------------------------------------------------------------------
+
+void CLI::_loadSettings() {
+    String savedDriver = _prefs.getString("driver", "");
+
+    if (savedDriver.length() > 0) {
+        IStepperDriver* restored = DriverFactory::create(savedDriver.c_str());
+        if (restored) {
+            delete _driver;
+            _driver = restored;
+        }
+    }
+
+    if (!_driver) return;
+
+    _driver->begin();
+
+    // Restore config
+    uint16_t usteps = _prefs.getUShort("usteps", 0);
+    if (usteps > 0) _driver->setMicrosteps(usteps);
+
+    bool dirFwd = _prefs.getBool("dirFwd", true);
+    _driver->setDirection(dirFwd);
+
+    uint16_t rms = _prefs.getUShort("rms", 0);
+    if (rms > 0) _driver->setCurrentMilliamps(rms);
+
+    bool spread = _prefs.getBool("spread", false);
+    _driver->setSpreadCycle(spread);
+}
+
+void CLI::_saveDriver(const char* name) {
+    _prefs.putString("driver", name);
+}
+
+void CLI::_saveConfig() {
+    if (!_driver) return;
+    // Config values are saved individually in command handlers.
 }
 
 // -----------------------------------------------------------------------------
@@ -132,7 +182,7 @@ void CLI::_cmdTestStop(const ParsedCommand& cmd) {
 
 void CLI::_cmdDriverSelect(const ParsedCommand& cmd) {
     if (!cmd.hasTarget()) {
-        Serial.println(F("Usage: driver select <a4988|tmc2209>"));
+        Serial.println(F("Usage: driver select <a4988|tmc2208|tmc2209>"));
         return;
     }
 
@@ -151,6 +201,7 @@ void CLI::_cmdDriverSelect(const ParsedCommand& cmd) {
     _driver = next;
     _driver->begin();
 
+    _saveDriver(_driver->driverName());
     Serial.print(F("Driver selected: ")); Serial.println(_driver->driverName());
 }
 
@@ -168,23 +219,26 @@ void CLI::_cmdDriverConfig(const ParsedCommand& cmd) {
     if (!ustepsStr.empty()) {
         uint16_t u = (uint16_t)atol(ustepsStr.c_str());
         _driver->setMicrosteps(u);
+        _prefs.putUShort("usteps", u);
         Serial.print(F("Microsteps set to 1/")); Serial.println(u);
         changed = true;
     }
 
     std::string dirStr = cmd.get("dir", "");
     if (!dirStr.empty()) {
-        if      (dirStr == "fwd") { _driver->setDirection(true);  Serial.println(F("Direction: forward")); changed = true; }
-        else if (dirStr == "rev") { _driver->setDirection(false); Serial.println(F("Direction: reverse")); changed = true; }
+        if      (dirStr == "fwd") { _driver->setDirection(true);  _prefs.putBool("dirFwd", true);  Serial.println(F("Direction: forward")); changed = true; }
+        else if (dirStr == "rev") { _driver->setDirection(false); _prefs.putBool("dirFwd", false); Serial.println(F("Direction: reverse")); changed = true; }
         else Serial.println(F("Error: --dir must be fwd or rev"));
     }
 
     if (cmd.flag("spread")) {
         _driver->setSpreadCycle(true);
+        _prefs.putBool("spread", true);
         Serial.println(F("Mode: SpreadCycle"));
         changed = true;
     } else if (cmd.flag("stealthchop")) {
         _driver->setSpreadCycle(false);
+        _prefs.putBool("spread", false);
         Serial.println(F("Mode: StealthChop"));
         changed = true;
     }
@@ -193,6 +247,7 @@ void CLI::_cmdDriverConfig(const ParsedCommand& cmd) {
     if (!currentStr.empty()) {
         uint16_t mA = (uint16_t)atol(currentStr.c_str());
         _driver->setCurrentMilliamps(mA);
+        _prefs.putUShort("rms", mA);
         Serial.print(F("Current: ")); Serial.print(mA); Serial.println(F(" mA RMS"));
         changed = true;
     }
@@ -211,6 +266,7 @@ void CLI::_cmdHelp(const ParsedCommand& cmd) {
         "                [--rms N] [--spread] [--stealthchop]\n"
         "  help\n"
         "\nDefaults: steps=200 speed=200 (steps/sec)\n"
+        "Settings are saved to NVS and persist across reboots.\n"
         "Note: --rms, --spread, --stealthchop are TMC2208/TMC2209-only.\n"
     ));
 }

@@ -1,5 +1,5 @@
 // =============================================================================
-// main.cpp — Phase 3
+// main.cpp
 // =============================================================================
 
 #include <Arduino.h>
@@ -7,6 +7,8 @@
 #include "cli/CLI.h"
 #include "driver/a4988/A4988Driver.h"
 
+// Default driver for first boot. Once a driver is selected via CLI,
+// NVS persistence takes over and this fallback is ignored.
 static CLI shell(new A4988Driver());
 
 void setup() {
