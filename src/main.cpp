@@ -7,8 +7,7 @@
 #include "cli/CLI.h"
 #include "driver/a4988/A4988Driver.h"
 
-static A4988Driver a4988;
-static CLI shell(&a4988);
+static CLI shell(new A4988Driver());
 
 void setup() {
     Serial.begin(CLI_BAUD);
@@ -32,7 +31,6 @@ void setup() {
     pinMode(PIN_DIAG,  INPUT_PULLUP);
     pinMode(PIN_INDEX, INPUT_PULLUP);
 
-    a4988.begin();
     shell.begin();
 }
 

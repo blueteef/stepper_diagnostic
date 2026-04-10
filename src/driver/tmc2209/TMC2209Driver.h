@@ -4,15 +4,15 @@
 #include <TMCStepper.h>
 
 // =============================================================================
-// TMC2209Driver — Implements IStepperDriver for the TMC2209 stepper driver.
+// TMC2209Driver — IStepperDriver implementation for the TMC2209 (v1.3+).
 //
 // UART:  single-wire half-duplex on PIN_UART (1k series resistor on PCB).
-//        Serial1 is used with RX == TX == PIN_UART.
-// Current: IRUN / IHOLD via UART (driver.rms_current()).
+//        Serial1 RX and TX are both set to PIN_UART.
+// Current: IRUN / IHOLD via UART.
 // Microstep: CHOPCONF.mres via UART.
-// Diagnostics: DRV_STATUS, SG_RESULT, TSTEP, GSTAT via UART + PIN_DIAG.
-//
-// Implemented in Phase 4.
+// Mode: StealthChop (default) or SpreadCycle.
+// StallGuard: registers accessible via UART; DIAG pin not wired on this PCB
+//             so stall interrupt is unavailable — threshold/result via UART only.
 // =============================================================================
 
 class TMC2209Driver : public IStepperDriver {
@@ -33,21 +33,21 @@ public:
     bool    isFaultActive()     override;
     String  getStatusReport()   override;
 
+    void setSpreadCycle(bool spreadCycle)       override;
+
     const char* driverName()    override { return "tmc2209"; }
     bool        supportsUART()  override { return true; }
 
-    // TMC2209-specific extras
-    void setSpreadCycle(bool spreadCycle);  // false = StealthChop
-    void setStallGuardThreshold(int8_t sgt);
+    // TMC2209-specific extras (DIAG not wired — no interrupt, UART read only)
+    void     setStallGuardThreshold(uint8_t sgt);
     uint16_t getStallGuardResult();
 
 private:
-    TMC2209Stepper _driver;
-    uint16_t       _currentMa = 0;
-    uint16_t       _usteps    = 16;  // TMC2209 default
-    bool           _forward   = true;
-    volatile bool  _running   = false;
-
-    void _stepBlocking(uint32_t steps, uint32_t stepsPerSec);
-    void _stepISR(uint32_t steps, uint32_t stepsPerSec);
+    TMC2209Stepper  _driver;
+    uint16_t        _currentMa   = 600;
+    uint16_t        _usteps      = 16;
+    bool            _enabled     = false;
+    bool            _forward     = true;
+    bool            _spreadCycle = false;
+    volatile bool   _running     = false;
 };

@@ -12,6 +12,7 @@ CLI::~CLI() {
 void CLI::begin() {
     Serial.println(F("\nStepper Driver Diag"));
     if (_driver) {
+        _driver->begin();
         Serial.print(F("Driver : ")); Serial.println(_driver->driverName());
     } else {
         Serial.println(F("No driver loaded. Use: driver select <name>"));
@@ -204,13 +205,13 @@ void CLI::_cmdHelp(const ParsedCommand& cmd) {
         "\nCommands:\n"
         "  test step [--steps N] [--speed N] [--dir fwd|rev] [--usteps 1|2|4|8|16]\n"
         "  test stop\n"
-        "  driver select <a4988|tmc2208>\n"
+        "  driver select <a4988|tmc2208|tmc2209>\n"
         "  driver status\n"
         "  driver config [--usteps 1|2|4|8|16] [--dir fwd|rev]\n"
         "                [--rms N] [--spread] [--stealthchop]\n"
         "  help\n"
         "\nDefaults: steps=200 speed=200 (steps/sec)\n"
-        "Note: --rms, --spread, --stealthchop are TMC2208-only.\n"
+        "Note: --rms, --spread, --stealthchop are TMC2208/TMC2209-only.\n"
     ));
 }
 

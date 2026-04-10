@@ -65,9 +65,9 @@
 
 #define TMC_UART_BAUD       115200
 
-// Sense resistor on the TMC2208 carrier board (ohms).
-// Most common boards (BTT, Fysetc, MKS) use 0.11 ohm.
+// Sense resistor value (ohms). BTT/Fysetc/MKS boards all use 0.11 ohm.
 #define TMC2208_RSENSE      0.11f
+#define TMC2209_RSENSE      0.11f
 
 // -----------------------------------------------------------------------------
 // Serial CLI
